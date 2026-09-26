@@ -1,0 +1,15 @@
+product_name = "Superset Desktop"
+project_name = "superset-desktop"
+compose_file = "docker-compose.yml"
+health_url = "http://127.0.0.1:3000/"
+wait_secs = 180
+down_on_exit = true
+remove_volumes = false
+allow_remote_ui = false
+engine = "auto"
+secret_keys = [
+  "SUPERSET_SECRET_KEY",
+  "SUPERSET_ADMIN_PASSWORD",
+  "POSTGRES_PASSWORD",
+  "NEO4J_PASSWORD",
+]

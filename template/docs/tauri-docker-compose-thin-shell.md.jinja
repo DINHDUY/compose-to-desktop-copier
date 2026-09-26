@@ -1,0 +1,102 @@
+# Thin Tauri Compose Shell
+
+{{ product_name }} is a desktop launcher, a window, and a Compose manager.
+
+Debug builds call Docker. A Windows release installer bundles the Podman engine and a Compose provider, and the shell runs the selected stack through `podman compose`.
+
+See [reusable-compose-shell.md](reusable-compose-shell.md) for the full reuse contract.
+
+```mermaid
+flowchart TB
+    User[User]
+    Shell[TauriShell]
+    Docker[DockerCompose]
+    UI[ui]
+{% if include_backend %}
+    API[api_optional]
+{% endif %}
+{% if include_database %}
+    DB[(db_optional)]
+{% endif %}
+
+    User --> Shell
+    Shell -->|"compose up -d"| Docker
+    Docker --> UI
+{% if include_backend %}
+    Docker --> API
+{% endif %}
+{% if include_database %}
+    Docker --> DB
+{% endif %}
+    Shell -->|"WebView after health ready"| UI
+```
+
+## Layout
+
+- [src-tauri/](../src-tauri/) — Tauri 2 crate
+- [shell.toml](../shell.toml) — stack manifest read by Rust
+- [docker-compose.yml](../docker-compose.yml) — stack at the repo root
+- [.env.example](../.env.example) — committed defaults; `.env` gitignored
+
+No `services/` folder and no sidecar. The shell runs on the host beside the OS WebView. Development uses Docker or Podman, whichever `make init` recorded. The Windows installer bundles Podman.
+
+## Compose file
+
+The root [docker-compose.yml](../docker-compose.yml) is the product stack:
+
+- `ui` — `nginx:alpine` by default, published on `127.0.0.1:{{ ui_port }}`
+{% if include_backend %}
+- `api` — optional `backend` profile, no host port
+{% endif %}
+{% if include_database %}
+- `db` — optional `database` profile, Postgres with a named volume and no host port
+{% endif %}
+{% if include_backend and include_database %}
+
+Set `COMPOSE_PROFILES=backend,database` in `.env` to start the full stack. Compose v2.20 or newer is required for `depends_on` with `required: false`.
+{% elif include_backend or include_database %}
+
+Compose v2.20 or newer is required for `depends_on` with `required: false`.
+{% endif %}
+
+Another stack is a separate directory with its own `project_name`. Select it with `STACK_DIR`.
+
+## Shell behavior
+
+Tauri 2 loads an external URL in the content window. A boot window is shown first. Rust then starts the engine, prepares `.env`, runs Compose, waits for Compose healthchecks, and polls the UI health URL before opening the content window.
+
+### Boot window
+
+The boot window shows a phase title, a detail line, an **estimated** progress bar, and elapsed time. Progress advances by boot phase and slow time-based creep inside each phase — it is indicative, not a real download percentage. During `compose up`, useful stdout lines (for example image pulls or container starts) update the detail text. Health waits show service counts from `compose ps`.
+
+Phases: preparing the stack, checking the container engine, pulling images and starting containers, waiting for services to become healthy, and waiting for the workspace. The first launch can take several minutes when large images are pulled.
+
+`tauri dev` waits for `devUrl` before it launches the binary. Development runs `cargo tauri dev --no-dev-server-wait` so Rust can start Compose before port {{ ui_port }} is open.
+
+Debug builds call `docker` unless `CONTAINER_RUNTIME=podman` or `shell.toml` sets `engine = "podman"`. `make init` writes `.container-runtime`, and `make dev` exports it as `CONTAINER_RUNTIME`. Debug Podman lookup still honors `PODMAN_PATH`, then `PATH`, and `PODMAN_COMPOSE_PROVIDER`, then `PATH`, after the bundled Compose provider. Release builds use Podman from the per-user and Program Files install locations and the bundled Compose provider. They ignore `PODMAN_PATH`, `PODMAN_COMPOSE_PROVIDER`, and `PATH`.
+
+[src-tauri/src/compose.rs](../src-tauri/src/compose.rs) uses `std::process::Command` argument arrays, never a shell string:
+
+1. Prepare the engine. Docker runs `docker info`. Podman on Windows checks WSL, starts or creates the machine, then runs `podman info`.
+2. `compose --project-directory <dir> -f <compose file> -p <project_name> up -d --remove-orphans`
+3. Poll `compose ps --all --format json` until declared healthchecks pass.
+4. Poll `health_url` from `shell.toml` until a 2xx response or `wait_secs` elapses.
+5. On exit, `compose ... down` without `-v` when `down_on_exit = true` and `remove_volumes = false`.
+
+Stack directory resolution:
+
+- `STACK_DIR` when set, in debug builds
+- repo root in debug builds when `STACK_DIR` is unset
+- app data `stack/` in release builds, seeded from bundled resources. Release ignores `STACK_DIR`
+
+[src-tauri/src/lib.rs](../src-tauri/src/lib.rs) opens the content window with `WebviewUrl::External`. `csp` stays null because that window is the product UI. Top-level navigation stays on loopback, or on the single `allow_remote_ui` origin. [src-tauri/capabilities/default.json](../src-tauri/capabilities/default.json) grants the window no permissions. The content webview's only IPC grant remains start-dragging.
+
+## Verification
+
+- `make test` — unit tests for manifest, compose args, engine paths, secret generation, and stack lint
+- `make stack-check` — lint the root stack and every `examples/*` stack
+- `make dev` — nginx stack on port {{ ui_port }}
+
+## Out of scope
+
+Tray icon, auto-update, offline image tarballs, macOS and Linux installers, image allowlists, a supervisor sidecar, and any UI/API source in this repo.

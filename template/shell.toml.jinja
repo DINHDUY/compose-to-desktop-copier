@@ -1,0 +1,14 @@
+product_name = "{{ product_name }}"
+project_name = "{{ project_slug }}"
+compose_file = "docker-compose.yml"
+health_url = "http://127.0.0.1:{{ ui_port }}/"
+wait_secs = 120
+down_on_exit = true
+remove_volumes = false
+allow_remote_ui = false
+engine = "auto"
+{% if include_database %}
+secret_keys = ["POSTGRES_PASSWORD"]
+{% else %}
+secret_keys = []
+{% endif %}

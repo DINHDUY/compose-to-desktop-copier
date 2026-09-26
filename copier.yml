@@ -1,0 +1,122 @@
+_min_copier_version: "9.0.0"
+_subdirectory: template
+_answers_file: .copier-answers.yml
+_templates_suffix: .jinja
+_envops:
+  keep_trailing_newline: true
+  trim_blocks: true
+  lstrip_blocks: true
+
+_exclude:
+  - copier.yml
+  - .git
+  - .DS_Store
+  - .container-runtime
+  - "**/target/**"
+
+_skip_if_exists:
+  - docker-compose.yml
+  - .env.example
+  - src-tauri/icons/32x32.png
+  - src-tauri/icons/128x128.png
+  - src-tauri/icons/128x128@2x.png
+  - src-tauri/icons/icon.icns
+  - src-tauri/icons/icon.ico
+
+product_name:
+  type: str
+  help: Window title and installer name
+  default: compose-to-desktop-copier
+  validator: >-
+    {%- if not product_name.strip() -%}
+    Product name is required
+    {%- elif "\n" in product_name or "\r" in product_name or '"' in product_name or "\\" in product_name -%}
+    Product name cannot contain quotes, backslashes, or line breaks
+    {%- endif -%}
+
+project_slug:
+  type: str
+  help: Cargo package name and Compose project name
+  default: compose-to-desktop-copier
+  validator: >-
+    {%- set letters = "abcdefghijklmnopqrstuvwxyz" -%}
+    {%- set body = letters + "0123456789-" -%}
+    {%- if project_slug|length < 2 or project_slug|length > 64 -%}
+    Use 2 to 64 characters
+    {%- elif project_slug[0] not in letters or project_slug.endswith("-") -%}
+    Use a lowercase slug that starts with a letter and does not end with a hyphen
+    {%- else -%}
+    {%- set ns = namespace(bad=false) -%}
+    {%- for ch in project_slug -%}
+    {%- if ch not in body -%}
+    {%- set ns.bad = true -%}
+    {%- endif -%}
+    {%- endfor -%}
+    {%- if ns.bad -%}
+    Use only lowercase letters, digits, and hyphens
+    {%- endif -%}
+    {%- endif -%}
+
+bundle_identifier:
+  type: str
+  help: Reverse-DNS app id used by the Tauri bundle
+  default: com.example.desktop
+  validator: >-
+    {%- set letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ" -%}
+    {%- set body = letters + "0123456789-" -%}
+    {%- set labels = bundle_identifier.split(".") -%}
+    {%- if labels|length < 2 -%}
+    Use a reverse-DNS id with at least two labels
+    {%- else -%}
+    {%- set ns = namespace(bad=false) -%}
+    {%- for label in labels -%}
+    {%- if label|length < 1 or label[0] not in letters or label.endswith("-") -%}
+    {%- set ns.bad = true -%}
+    {%- else -%}
+    {%- for ch in label -%}
+    {%- if ch not in body -%}
+    {%- set ns.bad = true -%}
+    {%- endif -%}
+    {%- endfor -%}
+    {%- endif -%}
+    {%- endfor -%}
+    {%- if ns.bad -%}
+    Use a reverse-DNS id whose labels start with a letter and contain only letters, digits, and hyphens
+    {%- endif -%}
+    {%- endif -%}
+
+description:
+  type: str
+  help: Short description stored in Cargo.toml
+  default: Thin desktop shell that starts a local Compose stack
+  validator: >-
+    {%- if not description.strip() -%}
+    Description is required
+    {%- elif "\n" in description or "\r" in description or '"' in description or "\\" in description -%}
+    Description cannot contain quotes, backslashes, or line breaks
+    {%- endif -%}
+
+ui_port:
+  type: int
+  help: Loopback port for the UI container
+  default: 3000
+  validator: "{%- if ui_port < 1 or ui_port > 65535 -%}Port must be between 1 and 65535{%- endif -%}"
+
+include_backend:
+  type: bool
+  help: Include the optional api Compose profile
+  default: true
+
+include_database:
+  type: bool
+  help: Include the optional Postgres Compose profile
+  default: true
+
+license:
+  type: str
+  help: License file written into the new project
+  default: Proprietary
+  choices:
+    - Proprietary
+    - MIT
+    - Apache-2.0

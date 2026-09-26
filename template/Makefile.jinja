@@ -1,0 +1,132 @@
+# {{ product_name }} — thin Tauri shell and local Compose stack.
+# Run `make` or `make help` to list targets.
+
+PROJECT := {{ project_slug }}
+MANIFEST := src-tauri/Cargo.toml
+RUNTIME_FILE := .container-runtime
+STACK_DIR ?=
+ifneq ($(STACK_DIR),)
+export STACK_DIR
+COMPOSE_DIR := $(STACK_DIR)
+else
+COMPOSE_DIR := .
+endif
+
+ifneq ($(wildcard $(RUNTIME_FILE)),)
+CONTAINER_RUNTIME ?= $(strip $(shell tr -d '\r' < $(RUNTIME_FILE)))
+endif
+ifneq ($(CONTAINER_RUNTIME),)
+export CONTAINER_RUNTIME
+endif
+
+ifeq ($(CONTAINER_RUNTIME),podman)
+COMPOSE_CLI := podman compose
+ifeq ($(OS),Windows_NT)
+PODMAN_COMPOSE_PROVIDER ?= $(shell cygpath -m '$(CURDIR)/installer/cache/docker-compose.exe')
+else
+PODMAN_COMPOSE_PROVIDER ?= $(shell if test -x "$(HOME)/.local/bin/docker-compose"; then echo "$(HOME)/.local/bin/docker-compose"; elif command -v docker-compose >/dev/null 2>&1; then command -v docker-compose; elif test -x /opt/homebrew/bin/docker-compose; then echo /opt/homebrew/bin/docker-compose; elif test -x /usr/local/bin/docker-compose; then echo /usr/local/bin/docker-compose; elif test -x /usr/libexec/docker/cli-plugins/docker-compose; then echo /usr/libexec/docker/cli-plugins/docker-compose; elif test -x /usr/lib/docker/cli-plugins/docker-compose; then echo /usr/lib/docker/cli-plugins/docker-compose; fi)
+endif
+ifneq ($(PODMAN_COMPOSE_PROVIDER),)
+export PODMAN_COMPOSE_PROVIDER
+endif
+else
+COMPOSE_CLI := docker compose
+endif
+
+COMPOSE := $(COMPOSE_CLI) --project-directory $(COMPOSE_DIR) -f $(COMPOSE_DIR)/docker-compose.yml -p $(PROJECT)
+
+# Cygwin/MSYS make does not provide INCLUDE/LIB, so cl.exe cannot find vcruntime.h.
+ifeq ($(OS),Windows_NT)
+cargo = CARGO_LINE='cargo $(1)' cmd /c "$$(cygpath -m '$(CURDIR)/scripts/vcenv.cmd')"
+else
+cargo = cargo $(1)
+endif
+
+.DEFAULT_GOAL := help
+
+.PHONY: help init env fmt test stack-check build dev release fetch-runtime install-cli docker-info compose-config compose-pull compose-up compose-down compose-ps clean
+
+help:
+	@echo "{{ product_name }}"
+	@echo "  make init            install Rust, Tauri, WebView libraries, and a container engine"
+	@echo "  make env             copy .env.example to .env when .env is absent"
+	@echo "  make fmt             cargo fmt"
+	@echo "  make test            cargo test"
+	@echo "  make stack-check     validate shell.toml stacks with cargo test stack_lint"
+	@echo "  make build           cargo build"
+	@echo "  make dev             cargo tauri dev --no-dev-server-wait"
+	@echo "  make fetch-runtime   download the pinned Podman MSI and Compose binary"
+	@echo "  make release         cargo tauri build"
+	@echo '  make install-cli     cargo install tauri-cli --version "^2"'
+	@echo "  make docker-info     show the selected container engine"
+	@echo "  make compose-config  render docker-compose.yml"
+	@echo "  make compose-pull    compose pull"
+	@echo "  make compose-up      compose up -d"
+	@echo "  make compose-down    compose down, volumes kept"
+	@echo "  make compose-ps      compose ps"
+	@echo "  make clean           cargo clean"
+	@echo ""
+	@echo "Set STACK_DIR to a directory that contains shell.toml."
+	@echo ".container-runtime selects docker or podman for make dev and make compose-*."
+
+env:
+	@if [ ! -f $(COMPOSE_DIR)/.env ]; then cp $(COMPOSE_DIR)/.env.example $(COMPOSE_DIR)/.env; echo "Wrote $(COMPOSE_DIR)/.env"; else echo "$(COMPOSE_DIR)/.env already exists"; fi
+
+fmt:
+	cargo fmt --manifest-path $(MANIFEST)
+
+test:
+	$(call cargo,test --manifest-path $(MANIFEST))
+
+stack-check:
+	$(call cargo,test --manifest-path $(MANIFEST) stack_lint::tests::repo_stacks_pass_lint -- --exact)
+
+build:
+	$(call cargo,build --manifest-path $(MANIFEST))
+
+dev: env
+	$(call cargo,tauri dev --no-dev-server-wait)
+
+ifeq ($(OS),Windows_NT)
+init: env
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/init-windows.ps1
+
+release: env fetch-runtime
+	$(call cargo,tauri build)
+
+fetch-runtime:
+	powershell -NoProfile -ExecutionPolicy Bypass -File scripts/fetch-runtime.ps1
+else
+init: env
+	bash scripts/init-unix.sh
+
+release: env
+	$(call cargo,tauri build)
+
+fetch-runtime:
+	@echo "fetch-runtime downloads the Windows Podman installer." && exit 1
+endif
+
+install-cli:
+	$(call cargo,install tauri-cli --version "^2")
+
+docker-info:
+	@if [ "$(CONTAINER_RUNTIME)" = "podman" ]; then podman info; else docker info; fi
+
+compose-config:
+	$(COMPOSE) config
+
+compose-pull:
+	$(COMPOSE) pull
+
+compose-up:
+	$(COMPOSE) up -d
+
+compose-down:
+	$(COMPOSE) down
+
+compose-ps:
+	$(COMPOSE) ps
+
+clean:
+	cargo clean --manifest-path $(MANIFEST)

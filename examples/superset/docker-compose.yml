@@ -1,0 +1,69 @@
+services:
+
+  ui:
+    image: apache/superset
+    ports:
+      - "127.0.0.1:3000:8088"
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY}
+    volumes:
+      - superset-home:/app/superset_home
+    depends_on:
+      db:
+        condition: service_healthy
+      graph:
+        condition: service_healthy
+    command:
+      - /bin/bash
+      - -c
+      - |
+        set -e
+        superset db upgrade
+        superset fab create-admin \
+          --username admin \
+          --email admin@superset.com \
+          --password "$${SUPERSET_ADMIN_PASSWORD}" \
+          --firstname Superset \
+          --lastname Admin \
+          || true
+        superset init
+        exec /app/docker/entrypoints/run-server.sh
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: research
+      POSTGRES_USER: research
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U research"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  graph:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p '${NEO4J_PASSWORD}' 'RETURN 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  superset-home:
+  db-data:
+  neo4j-data:

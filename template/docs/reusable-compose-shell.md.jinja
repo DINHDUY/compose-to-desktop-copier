@@ -1,0 +1,96 @@
+# Reusable Compose shell
+
+The shell stays a lifecycle manager. It will not learn service names. A stack is a directory containing `shell.toml`, `docker-compose.yml`, and `.env.example`. Debug runs that directory in place. A Windows release copies the bundled root stack into the app data directory so secrets and `.env` stay writable.
+
+```mermaid
+flowchart TD
+  launch[Launch] --> select[Resolve stack directory]
+  select --> manifest[Read shell.toml]
+  manifest --> secrets[Fill empty secret keys in .env]
+  secrets --> engine[Prepare Docker or Podman]
+  engine --> up["compose up -d --remove-orphans"]
+  up --> ps[Wait until declared healthchecks are healthy]
+  ps --> http[Poll health_url for HTTP 2xx]
+  http --> window[Open WebView at loopback origin]
+  window --> down["On exit: compose down without -v"]
+```
+
+## Stack layout
+
+- The app root is the stack: `shell.toml`, `docker-compose.yml`, `.env.example`.
+- `STACK_DIR` selects a stack for `make dev`. Debug builds use that directory, or the repo root when it is unset. Release builds ignore `STACK_DIR`, `PODMAN_PATH`, `PODMAN_COMPOSE_PROVIDER`, and `PATH`. They use the seeded app-data copy, the installed Podman, and the bundled Compose provider.
+- Each stack needs its own `project_name` so Compose projects do not share containers. This app uses `{{ project_slug }}`.
+- Installer identity stays {{ product_name }} in `src-tauri/tauri.conf.json`. Runtime window titles and dialogs use `product_name` from the selected `shell.toml`.
+
+Root Compose shape:
+
+- `ui` always starts. Default image `nginx:alpine`, published only as `127.0.0.1:${UI_PORT:-{{ ui_port }}}:80`. Replacing `UI_IMAGE` is how a real frontend is attached.
+{% if include_backend %}
+- `api` is behind profile `backend`. It starts only when `COMPOSE_PROFILES` includes `backend`. No host port; the UI uses the Compose network.
+{% endif %}
+{% if include_database %}
+- `db` is Postgres behind profile `database`. No host port. Named volume `db-data`. `pg_isready` healthcheck. Password comes from `${POSTGRES_PASSWORD}` with no literal default.
+{% endif %}
+{% if include_backend or include_database %}
+- `ui` uses `depends_on` with `required: false` for optional profiles, so a frontend-only `up` does not require them. Dev needs Compose v2.20 or newer.
+{% endif %}
+{% if include_database %}
+- A short comment in the root file shows how to copy `db` for a second database.
+{% endif %}
+
+## Manifest
+
+`src-tauri/src/manifest.rs` is parsed with `toml` and `serde`.
+
+```toml
+product_name = "{{ product_name }}"
+project_name = "{{ project_slug }}"
+compose_file = "docker-compose.yml"
+health_url = "http://127.0.0.1:{{ ui_port }}/"
+wait_secs = 120
+down_on_exit = true
+remove_volumes = false
+allow_remote_ui = false
+engine = "auto"
+{% if include_database %}
+secret_keys = ["POSTGRES_PASSWORD"]
+{% else %}
+secret_keys = []
+{% endif %}
+```
+
+Precedence for health URL, wait, and engine: process env (`UI_HEALTH_URL`, `UI_WAIT_SECS`, `CONTAINER_RUNTIME`), then `shell.toml`, then defaults. `engine = "auto"` keeps Docker in debug and Podman in release. `make init` writes `.container-runtime`, and `make dev` exports that value as `CONTAINER_RUNTIME`. `allow_remote_ui = false` rejects a health host other than `127.0.0.1` or `localhost`. `remove_volumes` stays false, so `down` omits `-v`.
+
+`compose_args` takes `project_name` and `compose_file` instead of assuming `docker-compose.yml`. `up` adds `--remove-orphans`.
+
+## Startup and secrets
+
+Debug: `STACK_DIR` or the repo root is the project directory. If `.env` is missing, copy `.env.example`. For each `secret_keys` entry that is missing or empty, append a random value. Never overwrite a non-empty value.
+
+Release ignores `STACK_DIR`. The seed is the bundled resources. First launch copies `shell.toml`, the compose file, and `.env.example` into the Tauri app data `stack` directory. Later launches overwrite `shell.toml` and the compose file when the bundled copies change, and leave `.env` in place. Compose runs from that directory. On Unix the shell sets `.env` to mode `0600`.
+
+Generation uses `getrandom` tokens written as hex.
+
+## Readiness
+
+After `up`, one deadline (`wait_secs`) covers both checks:
+
+- `compose ps --all --format json` (newline-delimited objects). `Health = starting` waits. `Health = unhealthy`, or `State = exited` with a non-zero exit code, fails and runs `down`. `running` with an empty `Health` is acceptable. Exit code 0 is acceptable for one-shot init containers.
+- Then the HTTP 2xx poll of `health_url`.
+
+## Another stack
+
+A second product is another directory with the same three files and a different `project_name`. Point `STACK_DIR` at that directory. `make stack-check` lints the root stack and, when `examples/` exists, every directory under it.
+
+## Lint
+
+`src-tauri/src/stack_lint.rs` runs from `cargo test` and `make stack-check`. It checks the root stack and every directory under `examples/`:
+
+- Published ports use a `127.0.0.1` bind address.
+- Database services (by image or `shell.role=database` label) have no `ports` and at least one named volume.
+- Values for keys containing `PASSWORD`, `SECRET`, `AUTH`, or `TOKEN` are `${...}` substitutions with no `:-literal` default.
+- Every `secret_keys` entry exists, empty, in that stack's `.env.example`.
+
+## Docs
+
+See [tauri-docker-compose-thin-shell.md](tauri-docker-compose-thin-shell.md) for the implemented contract.

@@ -1,0 +1,61 @@
+# Secrets
+.env
+.env.*
+!.env.example
+# The template repository stores the env example as .env.example.jinja.
+!.env.example.jinja
+
+# Commit .copier-answers.yml. Copier needs it to update this project.
+
+# Engine chosen by `make init` (docker or podman)
+.container-runtime
+
+# Temporary stacks created under the repo root by unit tests
+.stack-test-*/
+
+# Rust build output (binaries, deps, incremental, fingerprints)
+target/
+src-tauri/target/
+
+# Tauri generated schemas and permissions
+src-tauri/gen/
+
+# Compiled binaries and linker intermediates
+*.exe
+*.dll
+*.pdb
+*.exp
+*.ilk
+*.idb
+*.obj
+*.o
+*.a
+*.lib
+*.rlib
+*.rmeta
+*.so
+*.dylib
+
+# rustfmt backups
+**/*.rs.bk
+
+# Logs
+*.log
+
+# Node / frontend tooling, if added later
+node_modules/
+dist/
+dist-ssr/
+
+# Pinned Podman MSI and Compose provider downloaded by scripts/fetch-runtime.ps1
+installer/cache/
+
+# OS and editor junk
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.suo
+*.user
+.vs/
+.idea/

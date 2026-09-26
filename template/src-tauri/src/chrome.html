@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        user-select: none;
+      }
+      .cluster {
+        display: flex;
+        height: 100%;
+        background: transparent;
+      }
+      button {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: #000;
+        cursor: pointer;
+      }
+      button:hover {
+        background: transparent;
+        color: #000;
+      }
+      button svg {
+        display: block;
+        shape-rendering: crispEdges;
+      }
+      button .restore {
+        display: none;
+      }
+      button[data-maximized="true"] .maximize {
+        display: none;
+      }
+      button[data-maximized="true"] .restore {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="cluster">
+      <button id="minimize" type="button" aria-label="Minimize">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <rect x="3" y="7" width="10" height="2" fill="currentColor" />
+        </svg>
+      </button>
+      <button id="maximize" type="button" aria-label="Maximize">
+        <svg class="maximize" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" fill-rule="evenodd" d="M3 3h10v10H3V3zm2 2v6h6V5H5z" />
+        </svg>
+        <svg class="restore" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" fill-rule="evenodd" d="M6 2h8v8h-2V4H6V2zM2 6h8v8H2V6zm2 2v4h4V8H4z" />
+        </svg>
+      </button>
+      <button id="close" class="close" type="button" aria-label="Close">
+        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M4 3h2l2 3 2-3h2l-3 4 3 4h-2l-2-3-2 3H4l3-4-3-4z" />
+        </svg>
+      </button>
+    </div>
+    <script>
+      const internals = window.__TAURI_INTERNALS__;
+      const maximize = document.getElementById("maximize");
+
+      function invoke(command) {
+        return internals.invoke(command, {});
+      }
+
+      async function refresh() {
+        const maximized = await invoke("plugin:window|is_maximized");
+        maximize.dataset.maximized = maximized ? "true" : "false";
+        maximize.setAttribute("aria-label", maximized ? "Restore" : "Maximize");
+      }
+
+      document.getElementById("minimize").addEventListener("click", () => {
+        invoke("plugin:window|minimize");
+      });
+      maximize.addEventListener("click", async () => {
+        await invoke("plugin:window|toggle_maximize");
+        await refresh();
+      });
+      document.getElementById("close").addEventListener("click", () => {
+        invoke("plugin:window|close");
+      });
+
+      internals.invoke("plugin:event|listen", {
+        event: "tauri://resize",
+        target: { kind: "Window", label: "main" },
+        handler: internals.transformCallback(() => {
+          refresh();
+        }),
+      });
+      refresh();
+    </script>
+  </body>
+</html>

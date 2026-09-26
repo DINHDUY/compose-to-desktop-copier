@@ -1,0 +1,72 @@
+# Reusable template: frontend always runs; backend and database are optional profiles.
+{% if include_backend %}
+#   COMPOSE_PROFILES=backend        — start the api service
+{% endif %}
+{% if include_database %}
+#   COMPOSE_PROFILES=database       — start Postgres
+{% endif %}
+{% if include_backend and include_database %}
+#   COMPOSE_PROFILES=backend,database — full stack
+{% endif %}
+{% if include_database %}
+# Copy the db service block to add a second database.
+{% endif %}
+
+services:
+
+  ui:
+    image: ${UI_IMAGE:-nginx:alpine}
+    ports:
+      - "127.0.0.1:${UI_PORT:-{{ ui_port }}}:80"
+{% if include_backend or include_database %}
+    depends_on:
+{% if include_backend %}
+      api:
+        condition: service_healthy
+        required: false
+{% endif %}
+{% if include_database %}
+      db:
+        condition: service_healthy
+        required: false
+{% endif %}
+{% endif %}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+{% if include_backend %}
+
+  api:
+    profiles: [backend]
+    image: ${API_IMAGE:-nginx:alpine}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+{% endif %}
+{% if include_database %}
+
+  db:
+    profiles: [database]
+    image: ${POSTGRES_IMAGE:-postgres:17}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-app}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  db-data:
+{% endif %}

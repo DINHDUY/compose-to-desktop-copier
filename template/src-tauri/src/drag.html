@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+        cursor: default;
+      }
+    </style>
+  </head>
+  <body data-tauri-drag-region="deep">
+    <script>
+      window.addEventListener(
+        "mousedown",
+        (event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke;
+          if (invoke) invoke("plugin:window|start_dragging", {});
+        },
+        true
+      );
+    </script>
+  </body>
+</html>

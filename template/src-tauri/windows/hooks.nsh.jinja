@@ -1,0 +1,28 @@
+!macro NSIS_HOOK_POSTINSTALL
+  Push $0
+  Push $1
+  Push $2
+
+  StrCpy $0 "$INSTDIR\podman-installer.msi"
+  IfFileExists "$0" podman_have_msi
+  StrCpy $0 "$INSTDIR\resources\podman-installer.msi"
+  IfFileExists "$0" podman_have_msi podman_done
+
+  podman_have_msi:
+    FileOpen $1 "$0" r
+    IfErrors podman_done
+    FileSeek $1 0 END $2
+    FileClose $1
+    ; Skip the empty placeholder used when the MSI has not been fetched.
+    IntCmp $2 1048576 0 podman_done
+    DetailPrint "Installing Podman"
+    ExecWait '"$SYSDIR\msiexec.exe" /package "$0" /quiet /norestart MSIINSTALLPERUSER=1 MACHINE_PROVIDER=wsl' $1
+    IntCmp $1 0 podman_done
+    IntCmp $1 3010 podman_done
+    MessageBox MB_OK|MB_ICONEXCLAMATION "Podman could not be installed (msiexec exit $1). {{ product_name }} needs Podman before it can start containers."
+
+  podman_done:
+    Pop $2
+    Pop $1
+    Pop $0
+!macroend

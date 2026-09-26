@@ -1,0 +1,57 @@
+# {{ product_name }}
+
+Thin Tauri 2 shell for a local Docker Compose stack. The window loads the URL from `shell.toml` after Compose starts. Business logic stays in the container images.
+
+See [docs/reusable-compose-shell.md](docs/reusable-compose-shell.md) and [docs/tauri-docker-compose-thin-shell.md](docs/tauri-docker-compose-thin-shell.md).
+
+## Run
+
+`make init` installs the Rust toolchain (at least the `rust-version` in `src-tauri/Cargo.toml`), the Tauri 2 CLI, and the system WebView libraries. It does not install Docker Desktop. When `docker info` succeeds, development keeps using Docker. When Docker Desktop is installed and the daemon is stopped, init asks you to start it. When no Docker engine is available, init installs Podman and a Compose provider (2.20 or newer) and writes `podman` to `.container-runtime`. `make dev` and the `compose-*` targets export that choice as `CONTAINER_RUNTIME`.
+
+On Windows, run `make` from Git Bash or MSYS2. `make init` uses winget for Visual Studio Build Tools, WebView2, Rust, and Podman. Podman needs WSL. If WSL is missing, init prints `wsl --install --no-distribution` for an administrator PowerShell and does not reboot the machine.
+
+Release builds do not use Docker. On Windows, `make release` downloads the pinned Podman MSI and Compose provider, then the installer quietly installs Podman for the current user. The first launch still needs WSL: if it is missing, the app asks you to run `wsl --install --no-distribution` from an administrator PowerShell and restart.
+
+```text
+make init
+make help
+make test
+make stack-check
+make dev
+make fetch-runtime
+make release
+```
+
+`make dev` runs `cargo tauri dev --no-dev-server-wait`. That flag is required. The Tauri CLI would otherwise wait for port {{ ui_port }} before the shell is able to start Compose.
+
+## Stack contract
+
+Each stack is a directory with:
+
+- `shell.toml` — product name, Compose project name, health URL, secret keys
+- `docker-compose.yml` — services, ports, volumes, healthchecks
+- `.env.example` — committed defaults; `.env` is gitignored and created on first run
+
+The root stack starts `nginx:alpine` on `http://127.0.0.1:{{ ui_port }}`.
+{% if include_backend and include_database %}
+Optional `backend` and `database` Compose profiles add an API and Postgres.
+{% elif include_backend %}
+An optional `backend` Compose profile adds an API.
+{% elif include_database %}
+An optional `database` Compose profile adds Postgres.
+{% endif %}
+Set `STACK_DIR` to run another stack during development. Unset `STACK_DIR` uses the repo root in debug builds. Release builds ignore `STACK_DIR` and engine path overrides, copy the bundled root stack into app data, and keep `.env` there.
+
+`UI_HEALTH_URL` and `UI_WAIT_SECS` in the process environment override `.env` and `shell.toml`.
+
+A boot window stays up while the engine starts, images pull, Compose healthchecks pass, and the UI health URL responds. Closing the app runs `compose down` without `-v`, so named volumes stay. It does not stop the Podman machine.
+
+## Expected result today
+
+With Docker running, `make dev` starts the nginx stack and opens the window. With Docker stopped, the dialog says Docker is not running. A Windows release build looks for Podman instead, and shows how to install WSL when that feature is missing.
+
+## Updates
+
+This app was generated with Copier. From this directory, `copier update` pulls engine fixes. That update leaves `docker-compose.yml`, `.env.example`, and `src-tauri/icons/` in place when those files already exist. `.container-runtime` is written by `make init` on this machine and is not part of the template.
+
+Changing `identifier` in `src-tauri/tauri.conf.json` after the first shipped installer publishes a different app.
