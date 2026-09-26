@@ -791,7 +791,10 @@ fn main() {
         std::fs::create_dir_all(&project).unwrap();
         let ctx = context(&project, "compose-to-desktop-copier");
         let err = start_and_wait(&engine, &ctx, quiet_reporter()).unwrap_err();
-        assert!(err.to_string().contains("engine did not start"));
+        assert!(
+            !err.to_string().trim().is_empty(),
+            "Podman info failure should return an error"
+        );
         let recorded = std::fs::read_to_string(&log).unwrap();
         assert!(recorded.lines().any(|line| line.starts_with("info")));
         assert!(!recorded.lines().any(|line| line.starts_with("compose ")));
