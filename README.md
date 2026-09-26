@@ -1,12 +1,10 @@
 # compose-to-desktop-copier
 
+[![Template CI](https://github.com/DINHDUY/compose-to-desktop-copier/actions/workflows/template.yml/badge.svg)](https://github.com/DINHDUY/compose-to-desktop-copier/actions/workflows/template.yml)
+
 Copier template for a desktop app that packages its application as container images. This repository is the generator; the copied project is the app.
 
 The generated app is a Tauri 2 shell for macOS, Windows, and Linux. It starts a local Compose stack, waits for the UI health check, and opens the UI in the app window. The shell manages the stack lifecycle without depending on specific service names.
-
-`make init` installs the Rust toolchain, Tauri CLI, and system WebView libraries. It uses Docker when available; otherwise it installs Podman and a Compose provider and records the choice in `.container-runtime`. `make dev` uses that choice through `CONTAINER_RUNTIME`. Windows release builds bundle Podman, and require WSL on first launch.
-
-The sample answers describe `compose-to-desktop-copier`, with crate and Compose project `compose-to-desktop-copier`, bundle id `com.example.desktop`, serving `nginx:alpine` on port 3000. Accept them to render a known-good app, or replace them with the real product.
 
 ## Architecture
 
@@ -54,27 +52,6 @@ Typical uses:
 - Reproducing issues with the same images used in production
 - Internal tools that need a self-contained desktop install
 
-## Generate a project
-
-Install [Copier](https://copier.readthedocs.io/) 9 and run:
-
-```text
-copier copy gh:dinhduy/compose-to-desktop-copier my-app
-cd my-app
-make init
-make dev
-```
-
-Pin a release after this repository is tagged:
-
-```text
-copier copy gh:dinhduy/compose-to-desktop-copier --vcs-ref v1.0.0 my-app
-```
-
-Copier reads the latest tag when `--vcs-ref` is omitted. Use `--vcs-ref HEAD` to generate from the default branch. Copier copies tracked files, so commit the template before using it as a source. `scripts/test-template.sh` can copy the working tree, including uncommitted files.
-
-Each stack contains `shell.toml`, `docker-compose.yml`, and `.env.example`. Optional `backend` and `database` profiles add an API and Postgres. Set `STACK_DIR` to run another stack during development. Debug builds use that directory or the project directory. Release builds ignore `STACK_DIR` and engine path overrides, and copy the root stack into app data so `.env` remains writable.
-
 ## Use with an AI coding agent
 
 Give an AI coding agent this prompt, replacing the placeholders with your image names and local paths:
@@ -90,6 +67,31 @@ The app is at: path/to/your/local/app/src (if it already exists).
 ```
 
 The agent should inspect the existing Compose file and app before choosing the template answers. Keep the existing service configuration and image names where possible, and use the generated project for the desktop shell and local runtime setup.
+
+## Generate a project
+
+Install [Copier](https://copier.readthedocs.io/) 9 and run:
+
+```text
+copier copy gh:dinhduy/compose-to-desktop-copier my-app
+cd my-app
+make init
+make dev
+```
+`make init` installs the Rust toolchain, Tauri CLI, and system WebView libraries. It uses Docker when available; otherwise it installs Podman and a Compose provider and records the choice in `.container-runtime`. `make dev` uses that choice through `CONTAINER_RUNTIME`. Windows release builds bundle Podman, and require WSL on first launch.
+
+The sample answers describe `compose-to-desktop-copier`, with crate and Compose project `compose-to-desktop-copier`, bundle id `com.example.desktop`, serving `nginx:alpine` on port 3000. Accept them to render a known-good app, or replace them with the real product.
+
+Pin a release after this repository is tagged:
+
+```text
+copier copy gh:dinhduy/compose-to-desktop-copier --vcs-ref v1.0.0 my-app
+```
+
+Copier reads the latest tag when `--vcs-ref` is omitted. Use `--vcs-ref HEAD` to generate from the default branch. Copier copies tracked files, so commit the template before using it as a source. `scripts/test-template.sh` can copy the working tree, including uncommitted files.
+
+Each stack contains `shell.toml`, `docker-compose.yml`, and `.env.example`. Optional `backend` and `database` profiles add an API and Postgres. Set `STACK_DIR` to run another stack during development. Debug builds use that directory or the project directory. Release builds ignore `STACK_DIR` and engine path overrides, and copy the root stack into app data so `.env` remains writable.
+
 
 ## Questions
 
