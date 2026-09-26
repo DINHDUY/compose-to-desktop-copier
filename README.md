@@ -75,6 +75,22 @@ Copier reads the latest tag when `--vcs-ref` is omitted. Use `--vcs-ref HEAD` to
 
 Each stack contains `shell.toml`, `docker-compose.yml`, and `.env.example`. Optional `backend` and `database` profiles add an API and Postgres. Set `STACK_DIR` to run another stack during development. Debug builds use that directory or the project directory. Release builds ignore `STACK_DIR` and engine path overrides, and copy the root stack into app data so `.env` remains writable.
 
+## Use with an AI coding agent
+
+Give an AI coding agent this prompt, replacing the placeholders with your image names and local paths:
+
+```text
+Make a plan to create a desktop application using the compose-to-desktop-copier template: https://github.com/DINHDUY/compose-to-desktop-copier template.
+The app will use these container images:
+- Backend: <your-backend-image>
+- Frontend: <your-frontend-image>
+- Database: <your-database-image>
+Follow the example Docker Compose file at: path/to/your/existing/docker-compose.yaml
+The app is at: path/to/your/local/app/src (if it already exists).
+```
+
+The agent should inspect the existing Compose file and app before choosing the template answers. Keep the existing service configuration and image names where possible, and use the generated project for the desktop shell and local runtime setup.
+
 ## Questions
 
 | Answer | Sample default | Written into |
